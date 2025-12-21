@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="MpuSettingsPage" parent="AdwPreferencesPage">
+    <property name="title">Settings</property>
+    <property name="icon-name">preferences-system-symbolic</property>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Audio Output</property>
+
+        <child>
+          <object class="AdwComboRow" id="output_device_combo">
+            <property name="title">Output Device</property>
+            <property name="subtitle">Select audio output device</property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwSpinRow" id="buffer_size_spin">
+            <property name="title">Buffer Size</property>
+            <property name="subtitle">Audio buffer size in milliseconds</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">10</property>
+                <property name="upper">500</property>
+                <property name="value">100</property>
+                <property name="step-increment">10</property>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Network Defaults</property>
+
+        <child>
+          <object class="AdwSpinRow" id="default_port_spin">
+            <property name="title">Default Port</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">1024</property>
+                <property name="upper">65535</property>
+                <property name="value">5004</property>
+                <property name="step-increment">1</property>
+              </object>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwSpinRow" id="default_ttl_spin">
+            <property name="title">Default TTL</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">1</property>
+                <property name="upper">255</property>
+                <property name="value">32</property>
+                <property name="step-increment">1</property>
+              </object>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwComboRow" id="default_codec_combo">
+            <property name="title">Default Codec</property>
+            <property name="model">
+              <object class="GtkStringList">
+                <items>
+                  <item>G.711 u-law (PCMU)</item>
+                  <item>G.711 A-law (PCMA)</item>
+                  <item>G.722</item>
+                  <item>Opus</item>
+                  <item>Linear PCM (L16)</item>
+                </items>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Monitor Settings</property>
+
+        <child>
+          <object class="AdwSpinRow" id="idle_timeout_spin">
+            <property name="title">Idle Timeout</property>
+            <property name="subtitle">Seconds before marking stream inactive</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">1</property>
+                <property name="upper">60</property>
+                <property name="value">5</property>
+                <property name="step-increment">1</property>
+              </object>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwSwitchRow" id="auto_play_switch">
+            <property name="title">Auto-play New Pages</property>
+            <property name="subtitle">Automatically play audio when a new page is detected</property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Data</property>
+
+        <child>
+          <object class="AdwActionRow">
+            <property name="title">Configuration File</property>
+            <child type="suffix">
+              <object class="GtkLabel" id="config_path_label">
+                <property name="label">~/.config/multicast-paging-utility/config.toml</property>
+                <property name="ellipsize">start</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwActionRow">
+            <property name="title">Reset Settings</property>
+            <property name="subtitle">Restore all settings to defaults</property>
+            <child type="suffix">
+              <object class="GtkButton" id="reset_btn">
+                <property name="label">Reset</property>
+                <property name="valign">center</property>
+                <style>
+                  <class name="destructive-action"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

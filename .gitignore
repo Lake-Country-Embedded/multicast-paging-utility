@@ -1,0 +1,57 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo lock file - include for binaries, exclude for libraries
+# This is a binary application, so we include Cargo.lock
+# (don't add Cargo.lock to gitignore)
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test output directories
+test-output/
+test-output*/
+
+# Test audio files (generated for testing)
+test-audio/
+
+# Log files
+*.log
+
+# Environment and local config
+.env
+.env.local
+*.local
+
+# Coverage reports
+coverage/
+*.profraw
+*.profdata
+lcov.info
+tarpaulin-report.html
+
+# Documentation build
+/doc/
+
+# Backup files
+*.bak
+*.backup
+
+# Core dumps
+core
+core.*

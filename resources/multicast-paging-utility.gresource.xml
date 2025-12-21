@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/github/multicast-paging-utility">
+    <file preprocess="xml-stripblanks">ui/window.ui</file>
+    <file preprocess="xml-stripblanks">ui/transmit_page.ui</file>
+    <file preprocess="xml-stripblanks">ui/monitor_page.ui</file>
+    <file preprocess="xml-stripblanks">ui/settings_page.ui</file>
+    <file preprocess="xml-stripblanks">ui/add_range_dialog.ui</file>
+  </gresource>
+</gresources>

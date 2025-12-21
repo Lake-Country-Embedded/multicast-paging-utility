@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="MpuWindow" parent="AdwApplicationWindow">
+    <property name="title">Multicast Paging Utility</property>
+    <property name="default-width">900</property>
+    <property name="default-height">600</property>
+
+    <child>
+      <object class="AdwToastOverlay" id="toast_overlay">
+        <child>
+          <object class="AdwToolbarView">
+            <child type="top">
+              <object class="AdwHeaderBar">
+                <child type="title">
+                  <object class="AdwViewSwitcher" id="view_switcher">
+                    <property name="stack">view_stack</property>
+                    <property name="policy">wide</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <property name="content">
+              <object class="AdwViewStack" id="view_stack">
+                <child>
+                  <object class="AdwViewStackPage">
+                    <property name="name">transmit</property>
+                    <property name="title">Transmit</property>
+                    <property name="icon-name">audio-volume-high-symbolic</property>
+                    <property name="child">
+                      <object class="MpuTransmitPage" id="transmit_page"/>
+                    </property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwViewStackPage">
+                    <property name="name">monitor</property>
+                    <property name="title">Monitor</property>
+                    <property name="icon-name">preferences-system-network-symbolic</property>
+                    <property name="child">
+                      <object class="MpuMonitorPage" id="monitor_page"/>
+                    </property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwViewStackPage">
+                    <property name="name">settings</property>
+                    <property name="title">Settings</property>
+                    <property name="icon-name">preferences-system-symbolic</property>
+                    <property name="child">
+                      <object class="MpuSettingsPage" id="settings_page"/>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="MpuTransmitPage" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="spacing">24</property>
+    <property name="margin-start">24</property>
+    <property name="margin-end">24</property>
+    <property name="margin-top">24</property>
+    <property name="margin-bottom">24</property>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Audio Source</property>
+
+        <child>
+          <object class="AdwActionRow" id="file_row">
+            <property name="title">Audio File</property>
+            <property name="subtitle">Select a WAV or audio file to transmit</property>
+            <child type="suffix">
+              <object class="GtkBox">
+                <property name="spacing">8</property>
+                <child>
+                  <object class="GtkLabel" id="file_label">
+                    <property name="label">No file selected</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="browse_btn">
+                    <property name="label">Browse...</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwActionRow">
+            <property name="title">Duration</property>
+            <child type="suffix">
+              <object class="GtkLabel" id="duration_label">
+                <property name="label">--:--</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Destination</property>
+
+        <child>
+          <object class="AdwEntryRow" id="address_entry">
+            <property name="title">Multicast Address</property>
+            <property name="text">224.0.1.1</property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwSpinRow" id="port_spin">
+            <property name="title">Port</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">1024</property>
+                <property name="upper">65535</property>
+                <property name="value">5004</property>
+                <property name="step-increment">1</property>
+              </object>
+            </property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwComboRow" id="codec_combo">
+            <property name="title">Codec</property>
+            <property name="model">
+              <object class="GtkStringList">
+                <items>
+                  <item>G.711 u-law (PCMU)</item>
+                  <item>G.711 A-law (PCMA)</item>
+                  <item>G.722</item>
+                  <item>Opus</item>
+                  <item>Linear PCM (L16)</item>
+                </items>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title">Options</property>
+
+        <child>
+          <object class="AdwSpinRow" id="ttl_spin">
+            <property name="title">TTL (Time To Live)</property>
+            <property name="adjustment">
+              <object class="GtkAdjustment">
+                <property name="lower">1</property>
+                <property name="upper">255</property>
+                <property name="value">32</property>
+                <property name="step-increment">1</property>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="GtkBox">
+        <property name="vexpand">true</property>
+      </object>
+    </child>
+
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <property name="spacing">12</property>
+        <property name="halign">center</property>
+
+        <child>
+          <object class="GtkProgressBar" id="progress_bar">
+            <property name="visible">false</property>
+            <property name="show-text">true</property>
+            <property name="width-request">300</property>
+          </object>
+        </child>
+
+        <child>
+          <object class="GtkButton" id="send_btn">
+            <property name="label">Send Page</property>
+            <property name="sensitive">false</property>
+            <style>
+              <class name="suggested-action"/>
+              <class name="pill"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

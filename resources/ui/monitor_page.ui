@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="MpuMonitorPage" parent="GtkBox">
+    <property name="orientation">horizontal</property>
+    <property name="spacing">0</property>
+
+    <child>
+      <object class="GtkPaned" id="main_paned">
+        <property name="hexpand">true</property>
+        <property name="vexpand">true</property>
+        <property name="position">320</property>
+        <property name="shrink-start-child">false</property>
+        <property name="shrink-end-child">false</property>
+
+        <!-- Left Pane: Stream List -->
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">8</property>
+            <property name="margin-start">12</property>
+            <property name="margin-end">6</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
+            <property name="width-request">280</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Monitored Streams</property>
+                <property name="xalign">0</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="vexpand">true</property>
+                <property name="hscrollbar-policy">never</property>
+                <child>
+                  <object class="GtkListView" id="streams_list">
+                    <style>
+                      <class name="navigation-sidebar"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+
+                <child>
+                  <object class="GtkButton" id="add_range_btn">
+                    <property name="icon-name">list-add-symbolic</property>
+                    <property name="tooltip-text">Add address range</property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkButton" id="remove_range_btn">
+                    <property name="icon-name">list-remove-symbolic</property>
+                    <property name="tooltip-text">Remove selected</property>
+                    <property name="sensitive">false</property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkBox">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkButton" id="start_monitor_btn">
+                    <property name="label">Start</property>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+
+        <!-- Right Pane: Details Panel -->
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">12</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">12</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label">Active Page Details</property>
+                <property name="xalign">0</property>
+                <style>
+                  <class name="heading"/>
+                </style>
+              </object>
+            </child>
+
+            <!-- Active page selector -->
+            <child>
+              <object class="GtkBox" id="page_selector_box">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+                <property name="visible">false</property>
+
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">Active page:</property>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkDropDown" id="page_dropdown">
+                    <property name="hexpand">true</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <!-- Stream info -->
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">Stream Information</property>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Destination</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="dest_address_label">
+                        <property name="label">--</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Source Address</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="source_address_label">
+                        <property name="label">--</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Detected Codec</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="codec_label">
+                        <property name="label">--</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Duration</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="duration_label">
+                        <property name="label">--:--:--</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Packet Count</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="packet_count_label">
+                        <property name="label">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <!-- Quality metrics -->
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title">Quality Metrics</property>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Jitter</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="jitter_label">
+                        <property name="label">-- ms</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Packet Loss</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="packet_loss_label">
+                        <property name="label">--%</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow">
+                    <property name="title">Bytes Received</property>
+                    <child type="suffix">
+                      <object class="GtkLabel" id="bytes_label">
+                        <property name="label">0</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <!-- Spacer -->
+            <child>
+              <object class="GtkBox">
+                <property name="vexpand">true</property>
+              </object>
+            </child>
+
+            <!-- Playback controls -->
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">8</property>
+                <property name="halign">center</property>
+
+                <child>
+                  <object class="GtkButton" id="play_btn">
+                    <property name="label">Play Audio</property>
+                    <property name="sensitive">false</property>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="GtkButton" id="stop_btn">
+                    <property name="label">Stop</property>
+                    <property name="visible">false</property>
+                    <style>
+                      <class name="destructive-action"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

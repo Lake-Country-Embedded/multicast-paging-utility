@@ -40,9 +40,18 @@ cargo install --path .
 
 ### Dependencies
 
+**Build Dependencies:**
 - Rust 1.70+ (2021 edition)
 - Linux: ALSA development libraries (`libasound2-dev`)
 - For Opus support: `libopus-dev`
+
+**Runtime Dependencies:**
+- **ffmpeg** - Required for G.722 and high-quality G.711 encoding/decoding
+  - Ubuntu/Debian: `apt install ffmpeg`
+  - Fedora: `dnf install ffmpeg`
+  - macOS: `brew install ffmpeg`
+
+The utility will check for ffmpeg availability at startup and display an error if it's not found.
 
 ## Usage
 
@@ -122,6 +131,41 @@ multicast-paging-utility review --directory ./test-results --page 1
 # Play back recorded audio
 multicast-paging-utility review --directory ./test-results --play
 ```
+
+### Polycom Paging Mode
+
+Transmit and monitor Polycom PTT/Group Paging traffic. This uses Polycom's proprietary protocol, **not** standard RTP multicast.
+
+```bash
+# Transmit a page using G.722 (recommended, 16kHz wideband)
+multicast-paging-utility polycom-transmit --file audio.wav --channel 26
+
+# Transmit using G.711 µ-law (8kHz narrowband)
+multicast-paging-utility polycom-transmit --file audio.wav --channel 26 --codec g711u
+
+# Set custom caller ID
+multicast-paging-utility polycom-transmit --file audio.wav --caller-id "Reception"
+
+# Monitor Polycom pages on a single address
+multicast-paging-utility polycom-monitor --address 224.0.1.116 --port 5001
+
+# Monitor with recording
+multicast-paging-utility polycom-monitor --output ./recordings
+
+# Monitor specific channels only
+multicast-paging-utility polycom-monitor --channels 26-30
+
+# Monitor a range of addresses
+multicast-paging-utility polycom-monitor --address "224.0.{1-10}.116:{5001-5010}"
+```
+
+**Polycom Channel Reference:**
+- Channels 1-25: PTT (Push-to-Talk) mode
+  - Channel 24: Priority PTT
+  - Channel 25: Emergency PTT
+- Channels 26-50: Paging mode (default)
+  - Channel 49: Priority Paging
+  - Channel 50: Emergency Paging
 
 ## Address Range Syntax
 
@@ -278,16 +322,21 @@ src/
 │   ├── test.rs       # Test mode for CI/CD
 │   ├── review.rs     # Review test results
 │   ├── recorder.rs   # WAV file recording
-│   └── audio_analyzer.rs  # Real-time audio analysis
+│   ├── audio_analyzer.rs  # Real-time audio analysis
+│   ├── polycom_transmit.rs  # Polycom paging transmit
+│   └── polycom_monitor.rs   # Polycom paging monitor
 ├── codec/
 │   ├── mod.rs        # Codec factory
 │   ├── traits.rs     # Encoder/Decoder traits
 │   ├── g711.rs       # G.711 μ-law and A-law
+│   ├── g722.rs       # G.722 reference implementation
+│   ├── subprocess.rs # FFmpeg-based encoders/decoders
 │   ├── opus.rs       # Opus codec
 │   └── pcm.rs        # L16 uncompressed PCM
 ├── network/
 │   ├── mod.rs        # Network module exports
 │   ├── multicast.rs  # Multicast socket management
+│   ├── polycom.rs    # Polycom protocol implementation
 │   └── rtp.rs        # RTP packet parsing/building
 ├── utils/
 │   └── range_parser.rs  # Address range syntax parser

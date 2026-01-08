@@ -35,8 +35,34 @@ mod utils;
 
 use clap::Parser;
 use cli::{Cli, Commands};
+use std::process::Command;
 use std::time::Duration;
+use tracing::warn;
 use tracing_subscriber::EnvFilter;
+
+/// Check if ffmpeg is available in PATH
+fn check_ffmpeg_available() -> bool {
+    Command::new("ffmpeg")
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Check runtime dependencies and warn if missing
+fn check_runtime_dependencies(quiet: bool) {
+    if !check_ffmpeg_available() {
+        if !quiet {
+            eprintln!("Warning: ffmpeg not found in PATH");
+            eprintln!("  G.722 encoding/decoding will not be available.");
+            eprintln!("  Install ffmpeg: apt install ffmpeg (Debian/Ubuntu)");
+            eprintln!();
+        }
+        warn!("ffmpeg not found - G.722 codec support disabled");
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -56,6 +82,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(filter)
         .with_target(false)
         .init();
+
+    // Check runtime dependencies for commands that need them
+    if let Some(
+        Commands::Transmit { .. }
+        | Commands::Monitor { .. }
+        | Commands::Test { .. }
+        | Commands::PolycomTransmit { .. }
+        | Commands::PolycomMonitor { .. },
+    ) = &args.command
+    {
+        check_runtime_dependencies(args.quiet);
+    }
 
     match args.command {
         Some(Commands::Gui) | None => {
@@ -147,6 +185,74 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             cli::run_review(options)?;
+        }
+        Some(Commands::PolycomTransmit {
+            file,
+            address,
+            port,
+            channel,
+            codec,
+            caller_id,
+            ttl,
+            r#loop,
+            alert_count,
+            end_count,
+            control_interval,
+            skip_alert,
+            skip_end,
+            no_redundant,
+            no_audio_header,
+            little_endian,
+            raw,
+        }) => {
+            let addr = cli::monitor::parse_address(&address)?;
+
+            let options = cli::polycom_transmit::PolycomTransmitOptions {
+                file,
+                address: addr,
+                port,
+                channel,
+                codec,
+                caller_id,
+                ttl,
+                loop_audio: r#loop,
+                quiet: args.quiet,
+                alert_count,
+                end_count,
+                control_interval,
+                skip_alert,
+                skip_end,
+                no_redundant,
+                no_audio_header,
+                little_endian,
+                raw,
+            };
+
+            cli::run_polycom_transmit(options).await?;
+        }
+        Some(Commands::PolycomMonitor {
+            address,
+            port,
+            channels,
+            output,
+            timeout,
+            json,
+        }) => {
+            let options = cli::polycom_monitor::PolycomMonitorOptions {
+                pattern: address,
+                default_port: port,
+                channels,
+                output,
+                timeout: if timeout == 0 {
+                    Duration::MAX
+                } else {
+                    Duration::from_secs(timeout)
+                },
+                json,
+                quiet: args.quiet,
+            };
+
+            cli::run_polycom_monitor(options).await?;
         }
     }
 

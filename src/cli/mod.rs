@@ -3,12 +3,16 @@ use std::path::PathBuf;
 
 pub mod audio_analyzer;
 pub mod monitor;
+pub mod polycom_monitor;
+pub mod polycom_transmit;
 pub mod recorder;
 pub mod review;
 pub mod test;
 pub mod transmit;
 
 // Re-exports for convenient access
+pub use polycom_monitor::run_polycom_monitor;
+pub use polycom_transmit::run_polycom_transmit;
 pub use review::run_review;
 pub use test::run_test;
 pub use transmit::run_transmit;
@@ -151,6 +155,117 @@ pub enum Commands {
         /// Show details for a specific page number
         #[arg(long)]
         page: Option<u32>,
+    },
+
+    /// Transmit audio using Polycom PTT/Group Paging protocol.
+    /// This is a proprietary protocol used by Polycom phones,
+    /// NOT standard RTP multicast paging.
+    PolycomTransmit {
+        /// Audio file to transmit (WAV, MP3, FLAC, etc.)
+        #[arg(short, long)]
+        file: PathBuf,
+
+        /// Destination multicast address
+        #[arg(short, long, default_value = "224.0.1.116")]
+        address: String,
+
+        /// Destination UDP port
+        #[arg(short, long, default_value = "5001")]
+        port: u16,
+
+        /// Channel number (1-50).
+        /// PTT: 1-25 (24=Priority, 25=Emergency)
+        /// Paging: 26-50 (49=Priority, 50=Emergency)
+        #[arg(short, long, default_value = "26")]
+        channel: u8,
+
+        /// Codec to use: g722 (16kHz, recommended), g711u, g711a (8kHz)
+        #[arg(long, default_value = "g722")]
+        codec: String,
+
+        /// Caller ID string (displayed on receiving phones)
+        #[arg(long, default_value = "MPS-IP")]
+        caller_id: String,
+
+        /// Multicast TTL (Time To Live)
+        #[arg(long, default_value = "32")]
+        ttl: u8,
+
+        /// Loop the audio file continuously
+        #[arg(long)]
+        r#loop: bool,
+
+        /// Number of Alert packets to send (default: 31)
+        #[arg(long, default_value = "31")]
+        alert_count: u32,
+
+        /// Number of End packets to send (default: 12)
+        #[arg(long, default_value = "12")]
+        end_count: u32,
+
+        /// Delay between control packets in ms (default: 30)
+        #[arg(long, default_value = "30")]
+        control_interval: u64,
+
+        /// Skip Alert packets entirely (for debugging)
+        #[arg(long)]
+        skip_alert: bool,
+
+        /// Skip End packets entirely (for debugging)
+        #[arg(long)]
+        skip_end: bool,
+
+        /// Skip redundant audio frames (for debugging)
+        #[arg(long)]
+        no_redundant: bool,
+
+        /// Skip audio header (send raw audio after Polycom header)
+        #[arg(long)]
+        no_audio_header: bool,
+
+        /// Use little-endian byte order for sample count (for debugging)
+        #[arg(long)]
+        little_endian: bool,
+
+        /// File is raw pre-encoded audio (not WAV).
+        /// Use with ffmpeg to encode: ffmpeg -i input.wav -ar 16000 -acodec g722 -f g722 output.raw
+        #[arg(long)]
+        raw: bool,
+    },
+
+    /// Monitor for Polycom PTT/Group Paging traffic.
+    /// Listens on a multicast address and displays/records
+    /// received Polycom pages.
+    PolycomMonitor {
+        /// Multicast address pattern to monitor.
+        /// Supports range syntax: 224.0.{1-10}.116:{5001-5010}
+        /// Examples:
+        ///   224.0.1.116:5001       - single address and port
+        ///   224.0.1.116            - single address (uses --port)
+        ///   224.0.{1-10}.116:5001  - range of addresses
+        #[arg(short, long, default_value = "224.0.1.116")]
+        address: String,
+
+        /// UDP port (used when address doesn't include port)
+        #[arg(short, long, default_value = "5001")]
+        port: u16,
+
+        /// Channels to monitor: "all", single (e.g. "26"),
+        /// range (e.g. "26-50"), or comma-separated (e.g. "26,27,50")
+        #[arg(short, long, default_value = "all")]
+        channels: String,
+
+        /// Output directory for recordings (WAV format)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Timeout in seconds (0 = indefinite)
+        #[arg(short, long, default_value = "0")]
+        timeout: u64,
+
+        /// Output format in JSON (for automated testing)
+        #[arg(long)]
+        json: bool,
     },
 }
 

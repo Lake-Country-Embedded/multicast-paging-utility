@@ -1,11 +1,14 @@
 pub mod g711;
+pub mod g722;
 pub mod opus;
 pub mod pcm;
+pub mod subprocess;
 pub mod traits;
 
 pub use g711::{G711AlawCodec, G711UlawCodec};
 pub use opus::{OpusDecoder, OpusEncoder};
 pub use pcm::L16Codec;
+pub use subprocess::{FfmpegG711AlawEncoder, FfmpegG711UlawEncoder, FfmpegG722Decoder, FfmpegG722Encoder};
 pub use traits::{AudioDecoder, AudioEncoder, CodecError, CodecType};
 
 /// Create a decoder for the given codec type
@@ -13,7 +16,7 @@ pub fn create_decoder(codec_type: CodecType) -> Result<Box<dyn AudioDecoder>, Co
     match codec_type {
         CodecType::G711Ulaw => Ok(Box::new(G711UlawCodec::new())),
         CodecType::G711Alaw => Ok(Box::new(G711AlawCodec::new())),
-        CodecType::G722 => Err(CodecError::UnsupportedPayloadType(9)), // TODO: Implement G.722
+        CodecType::G722 => Ok(Box::new(FfmpegG722Decoder::new()?)),
         CodecType::Opus => Ok(Box::new(OpusDecoder::new_stereo()?)),
         CodecType::L16 => Ok(Box::new(L16Codec::standard_mono())),
     }
@@ -32,7 +35,7 @@ pub fn create_encoder(codec_type: CodecType) -> Result<Box<dyn AudioEncoder>, Co
     match codec_type {
         CodecType::G711Ulaw => Ok(Box::new(G711UlawCodec::new())),
         CodecType::G711Alaw => Ok(Box::new(G711AlawCodec::new())),
-        CodecType::G722 => Err(CodecError::UnsupportedPayloadType(9)), // TODO: Implement G.722
+        CodecType::G722 => Ok(Box::new(FfmpegG722Encoder::new()?)),
         CodecType::Opus => Ok(Box::new(OpusEncoder::new_mono(24000)?)),
         CodecType::L16 => Ok(Box::new(L16Codec::telephony())),
     }

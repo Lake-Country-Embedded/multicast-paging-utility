@@ -20,6 +20,9 @@ pub enum CodecError {
 
     #[error("Initialization error: {0}")]
     InitError(String),
+
+    #[error("Invalid frame size: expected {expected}, got {got}")]
+    InvalidFrameSize { expected: usize, got: usize },
 }
 
 /// Supported codec types

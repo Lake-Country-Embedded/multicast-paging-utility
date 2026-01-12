@@ -30,6 +30,8 @@ pub struct MulticastSocket {
     port: u16,
     joined_groups: HashSet<Ipv4Addr>,
     interface: Ipv4Addr,
+    /// The multicast group this socket is bound to (for filtering)
+    bound_group: Option<Ipv4Addr>,
 }
 
 impl MulticastSocket {
@@ -65,7 +67,57 @@ impl MulticastSocket {
             port,
             joined_groups: HashSet::new(),
             interface,
+            bound_group: None,
         })
+    }
+
+    /// Create a new multicast socket bound to a specific multicast group address.
+    /// This ensures the socket only receives packets destined for this specific group,
+    /// even when multiple sockets share the same port with SO_REUSEPORT.
+    #[allow(clippy::unused_async)]
+    pub async fn bound_to_group(group: Ipv4Addr, port: u16, interface: Ipv4Addr) -> Result<Self, MulticastError> {
+        if !group.is_multicast() {
+            return Err(MulticastError::NotMulticast(group));
+        }
+
+        // Create socket with socket2 for fine-grained control
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+
+        // Allow multiple processes to bind to same port
+        socket.set_reuse_address(true)?;
+        #[cfg(unix)]
+        socket.set_reuse_port(true)?;
+
+        // Set non-blocking before converting
+        socket.set_nonblocking(true)?;
+
+        // Bind to the multicast group address directly.
+        // On Linux, this ensures the socket only receives packets destined for this group.
+        let addr = SocketAddrV4::new(group, port);
+        socket.bind(&addr.into())?;
+
+        // Convert to std socket, then to tokio
+        let std_socket: UdpSocket = socket.into();
+        let tokio_socket = TokioUdpSocket::from_std(std_socket)?;
+
+        // Join the multicast group
+        tokio_socket.join_multicast_v4(group, interface)?;
+
+        let mut joined_groups = HashSet::new();
+        joined_groups.insert(group);
+
+        Ok(Self {
+            socket: tokio_socket,
+            port,
+            joined_groups,
+            interface,
+            bound_group: Some(group),
+        })
+    }
+
+    /// Get the multicast group this socket is bound to (if any)
+    pub fn bound_group(&self) -> Option<Ipv4Addr> {
+        self.bound_group
     }
 
     /// Join a multicast group

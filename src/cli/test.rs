@@ -326,22 +326,14 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     let endpoint_count = endpoints.len();
     let mut errors: Vec<String> = Vec::new();
 
-    // Group endpoints by port
-    let mut ports: HashMap<u16, Vec<Ipv4Addr>> = HashMap::new();
-    for ep in &endpoints {
-        ports.entry(ep.port).or_default().push(ep.address);
-    }
-
-    // Create sockets and join multicast groups
-    // Use specified interface if provided, otherwise default to INADDR_ANY
+    // Create sockets - one per endpoint (address:port pair)
+    // Each socket is bound to its specific multicast group address to ensure proper filtering
+    // when multiple endpoints share the same port (e.g., 224.1.1.2:5000 and 224.1.1.3:5000)
     let interface = options.interface.unwrap_or(Ipv4Addr::UNSPECIFIED);
-    let mut sockets: HashMap<u16, MulticastSocket> = HashMap::new();
-    for (&port, addresses) in &ports {
-        let mut socket = MulticastSocket::with_interface(port, interface).await?;
-        for &addr in addresses {
-            socket.join(addr)?;
-        }
-        sockets.insert(port, socket);
+    let mut sockets: HashMap<(Ipv4Addr, u16), MulticastSocket> = HashMap::new();
+    for ep in &endpoints {
+        let socket = MulticastSocket::bound_to_group(ep.address, ep.port, interface).await?;
+        sockets.insert((ep.address, ep.port), socket);
     }
 
     // Create endpoint states
@@ -402,16 +394,18 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
         }
 
         // Receive from all sockets
+        // Each socket is bound to a specific multicast group, so packets are pre-filtered
         let recv_timeout = Duration::from_millis(10);
 
-        for (&port, socket) in &sockets {
+        for (&endpoint_key, socket) in &sockets {
             loop {
                 let recv_result = tokio::time::timeout(recv_timeout, socket.recv_from(&mut buf)).await;
 
                 let (len, src_addr) = match recv_result {
                     Ok(Ok((len, addr))) => (len, addr),
                     Ok(Err(e)) => {
-                        errors.push(format!("Receive error on port {}: {}", port, e));
+                        let (addr, port) = endpoint_key;
+                        errors.push(format!("Receive error on {}:{}: {}", addr, port, e));
                         break;
                     }
                     Err(_) => break,
@@ -421,16 +415,10 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
                     continue;
                 };
 
-                let endpoint_key = endpoint_states.iter()
-                    .filter(|((_, p), _)| *p == port)
-                    .find(|(_, state)| state.ssrc == Some(packet.header.ssrc) || !state.page_active)
-                    .map(|(k, _)| *k);
-
-                if let Some(key) = endpoint_key {
-                    if let Some(state) = endpoint_states.get_mut(&key) {
-                        if let Err(e) = handle_test_packet(state, &packet, &options) {
-                            errors.push(format!("Error handling packet on {}: {}", state.endpoint_string(), e));
-                        }
+                // Directly use the endpoint key since each socket is bound to exactly one endpoint
+                if let Some(state) = endpoint_states.get_mut(&endpoint_key) {
+                    if let Err(e) = handle_test_packet(state, &packet, &options) {
+                        errors.push(format!("Error handling packet on {}: {}", state.endpoint_string(), e));
                     }
                 }
             }

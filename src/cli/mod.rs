@@ -58,6 +58,13 @@ pub enum Commands {
         #[arg(short, long, default_value = "5004")]
         port: u16,
 
+        /// Network interface IP address to bind for multicast reception.
+        /// Use this when multicast traffic arrives on a specific interface.
+        /// Example: --interface 192.168.12.65 (for br0 bridge)
+        /// If not specified, the system default interface is used.
+        #[arg(short, long)]
+        interface: Option<String>,
+
         /// Force specific codec (auto-detect if not specified)
         /// Options: g711ulaw, g711alaw, g722, opus, l16
         #[arg(short, long)]
@@ -117,6 +124,13 @@ pub enum Commands {
         /// UDP port (used when address doesn't include port)
         #[arg(short, long, default_value = "5004")]
         port: u16,
+
+        /// Network interface IP address to bind for multicast reception.
+        /// Use this when multicast traffic arrives on a specific interface.
+        /// Example: --interface 192.168.12.65 (for br0 bridge)
+        /// If not specified, the system default interface is used.
+        #[arg(short, long)]
+        interface: Option<String>,
 
         /// Force specific codec (auto-detect if not specified)
         /// Options: g711ulaw, g711alaw, g722, opus, l16

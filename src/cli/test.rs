@@ -46,6 +46,7 @@ pub enum TestError {
 pub struct TestOptions {
     pub pattern: String,
     pub default_port: u16,
+    pub interface: Option<Ipv4Addr>,
     pub codec: Option<CodecType>,
     pub output_dir: PathBuf,
     pub timeout: Duration,
@@ -332,9 +333,11 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     }
 
     // Create sockets and join multicast groups
+    // Use specified interface if provided, otherwise default to INADDR_ANY
+    let interface = options.interface.unwrap_or(Ipv4Addr::UNSPECIFIED);
     let mut sockets: HashMap<u16, MulticastSocket> = HashMap::new();
     for (&port, addresses) in &ports {
-        let mut socket = MulticastSocket::new(port).await?;
+        let mut socket = MulticastSocket::with_interface(port, interface).await?;
         for &addr in addresses {
             socket.join(addr)?;
         }

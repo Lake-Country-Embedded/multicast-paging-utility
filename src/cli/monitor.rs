@@ -164,6 +164,7 @@ pub enum JsonEvent {
 pub struct MonitorOptions {
     pub address: Ipv4Addr,
     pub port: u16,
+    pub interface: Option<Ipv4Addr>,
     pub codec: Option<CodecType>,
     pub output: Option<PathBuf>,
     pub timeout: Duration,
@@ -175,6 +176,7 @@ pub struct MonitorOptions {
 pub struct MonitorRangeOptions {
     pub pattern: String,
     pub default_port: u16,
+    pub interface: Option<Ipv4Addr>,
     pub codec: Option<CodecType>,
     pub output: Option<PathBuf>,
     pub timeout: Duration,
@@ -258,9 +260,11 @@ pub async fn run_monitor_range(options: MonitorRangeOptions) -> Result<(), Monit
     }
 
     // Create sockets and join multicast groups
+    // Use specified interface if provided, otherwise default to INADDR_ANY
+    let interface = options.interface.unwrap_or(Ipv4Addr::UNSPECIFIED);
     let mut sockets: HashMap<u16, MulticastSocket> = HashMap::new();
     for (&port, addresses) in &ports {
-        let mut socket = MulticastSocket::new(port).await?;
+        let mut socket = MulticastSocket::with_interface(port, interface).await?;
         for &addr in addresses {
             socket.join(addr)?;
         }
@@ -587,6 +591,7 @@ pub async fn run_monitor(options: MonitorOptions) -> Result<(), MonitorError> {
     let range_options = MonitorRangeOptions {
         pattern: format!("{}:{}", options.address, options.port),
         default_port: options.port,
+        interface: options.interface,
         codec: options.codec,
         output: options.output,
         timeout: options.timeout,

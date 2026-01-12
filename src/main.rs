@@ -103,16 +103,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Monitor {
             address,
             port,
+            interface,
             codec,
             output,
             timeout,
             json,
         }) => {
             let codec_type = codec.as_ref().and_then(|c| codec::CodecType::from_str(c));
+            let interface_addr = interface
+                .as_ref()
+                .and_then(|s| s.parse::<std::net::Ipv4Addr>().ok());
 
             let options = cli::monitor::MonitorRangeOptions {
                 pattern: address,
                 default_port: port,
+                interface: interface_addr,
                 codec: codec_type,
                 output,
                 timeout: if timeout == 0 {
@@ -153,16 +158,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Test {
             address,
             port,
+            interface,
             codec,
             output,
             timeout,
             metrics_interval,
         }) => {
             let codec_type = codec.as_ref().and_then(|c| codec::CodecType::from_str(c));
+            let interface_addr = interface
+                .as_ref()
+                .and_then(|s| s.parse::<std::net::Ipv4Addr>().ok());
 
             let options = cli::test::TestOptions {
                 pattern: address,
                 default_port: port,
+                interface: interface_addr,
                 codec: codec_type,
                 output_dir: output,
                 timeout: Duration::from_secs(timeout),

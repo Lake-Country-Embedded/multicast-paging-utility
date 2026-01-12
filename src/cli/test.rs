@@ -15,6 +15,8 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -359,10 +361,25 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     let test_start_time = Utc::now();
     let start_instant = Instant::now();
     let mut last_metrics_sample = Instant::now();
-    let idle_timeout = Duration::from_secs(5);
+    let idle_timeout = Duration::from_secs(2);
     let mut buf = vec![0u8; 2048];
 
+    // Set up signal handling for graceful shutdown
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_clone = shutdown.clone();
+    tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            shutdown_clone.store(true, Ordering::SeqCst);
+        }
+    });
+
     loop {
+        // Check for shutdown signal
+        if shutdown.load(Ordering::SeqCst) {
+            println!("Received shutdown signal, finalizing...");
+            break;
+        }
+
         // Check for overall timeout
         if start_instant.elapsed() >= options.timeout {
             println!("Timeout reached.");
@@ -503,8 +520,13 @@ fn handle_test_packet(
     packet: &RtpPacket,
     options: &TestOptions,
 ) -> Result<(), TestError> {
-    // Check if this is a new page
+    // Check if this is a new page (SSRC changed)
     if state.ssrc.is_none() || state.ssrc != Some(packet.header.ssrc) {
+        // If there was a previous page active, finalize it first
+        if state.page_active {
+            handle_test_page_end(state, &options.output_dir)?;
+        }
+
         state.page_count += 1;
         state.ssrc = Some(packet.header.ssrc);
         state.page_start = Some(Instant::now());

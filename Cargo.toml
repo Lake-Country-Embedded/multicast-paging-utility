@@ -17,7 +17,7 @@ gtk4 = { version = "0.9", optional = true }
 libadwaita = { version = "0.7", optional = true }
 
 # Async
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "signal"] }
 async-channel = "2"
 
 # Networking

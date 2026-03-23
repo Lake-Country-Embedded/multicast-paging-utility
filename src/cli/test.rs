@@ -364,14 +364,28 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     let idle_timeout = Duration::from_secs(2);
     let mut buf = vec![0u8; 2048];
 
-    // Set up signal handling for graceful shutdown
+    // Set up signal handling for graceful shutdown (SIGINT + SIGTERM)
     let shutdown = Arc::new(AtomicBool::new(false));
-    let shutdown_clone = shutdown.clone();
-    tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
+    {
+        let shutdown_clone = shutdown.clone();
+        tokio::spawn(async move {
+            if tokio::signal::ctrl_c().await.is_ok() {
+                shutdown_clone.store(true, Ordering::SeqCst);
+            }
+        });
+    }
+    #[cfg(unix)]
+    {
+        let shutdown_clone = shutdown.clone();
+        tokio::spawn(async move {
+            let mut sigterm = tokio::signal::unix::signal(
+                tokio::signal::unix::SignalKind::terminate(),
+            )
+            .expect("Failed to register SIGTERM handler");
+            sigterm.recv().await;
             shutdown_clone.store(true, Ordering::SeqCst);
-        }
-    });
+        });
+    }
 
     loop {
         // Check for shutdown signal

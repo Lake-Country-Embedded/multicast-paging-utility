@@ -48,8 +48,9 @@ impl MulticastSocket {
 
         // Allow multiple processes to bind to same port
         socket.set_reuse_address(true)?;
-        #[cfg(unix)]
-        socket.set_reuse_port(true)?;
+        // Note: SO_REUSEPORT intentionally not set — it causes the kernel to
+        // load-balance packets across sockets on the same port, breaking
+        // per-group address filtering when monitoring multiple multicast groups.
 
         // Set non-blocking before converting
         socket.set_nonblocking(true)?;
@@ -85,8 +86,9 @@ impl MulticastSocket {
 
         // Allow multiple processes to bind to same port
         socket.set_reuse_address(true)?;
-        #[cfg(unix)]
-        socket.set_reuse_port(true)?;
+        // Note: SO_REUSEPORT intentionally not set — it causes the kernel to
+        // load-balance packets across sockets on the same port, breaking
+        // per-group address filtering when monitoring multiple multicast groups.
 
         // Set non-blocking before converting
         socket.set_nonblocking(true)?;

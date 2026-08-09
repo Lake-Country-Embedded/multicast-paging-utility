@@ -163,6 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
             timeout,
             metrics_interval,
+            json,
         }) => {
             let codec_type = codec.as_ref().and_then(|c| codec::CodecType::from_str(c));
             let interface_addr = interface
@@ -177,9 +178,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 output_dir: output,
                 timeout: Duration::from_secs(timeout),
                 metrics_interval: Duration::from_millis(metrics_interval),
+                json,
             };
 
-            cli::run_test(options).await?;
+            // Setup failures must be distinguishable from "ran fine, saw no
+            // pages". Under --json they are reported as a structured error
+            // event; either way the exit status is non-zero, so a consumer can
+            // tell "never started" from "started and found nothing".
+            if let Err(e) = cli::run_test(options).await {
+                if json {
+                    cli::test::emit_event(&cli::test::TestEvent::Error {
+                        code: e.code(),
+                        message: e.to_string(),
+                    });
+                }
+                return Err(e.into());
+            }
         }
         Some(Commands::Review {
             directory,

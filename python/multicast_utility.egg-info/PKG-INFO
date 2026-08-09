@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: multicast-utility
+Version: 0.1.0
+Summary: Python bindings and pytest fixtures for the multicast paging utility
+Requires-Python: >=3.9

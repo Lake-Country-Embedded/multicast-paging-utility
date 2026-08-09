@@ -142,13 +142,21 @@ pub enum Commands {
         #[arg(short, long)]
         output: PathBuf,
 
-        /// Test timeout in seconds (required, must be > 0)
+        /// Test timeout in seconds. Use 0 to run until stopped
+        /// (SIGINT/SIGTERM), which still writes a complete summary.
         #[arg(short, long)]
         timeout: u64,
 
         /// Metrics sampling interval in milliseconds
         #[arg(long, default_value = "500")]
         metrics_interval: u64,
+
+        /// Emit newline-delimited JSON events on stdout instead of prose.
+        /// Events: test_started, armed, page_started, page_ended,
+        /// test_completed, error. Wait for `armed` before triggering a page --
+        /// it fires once every multicast group has been joined.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Review test results from a previous test run.

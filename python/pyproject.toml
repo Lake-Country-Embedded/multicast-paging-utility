@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multicast-utility"
+version = "0.1.0"
+description = "Python bindings and pytest fixtures for the multicast paging utility"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.entry-points.pytest11]
+multicast_utility = "multicast_utility.pytest_plugin"
+
+[project.scripts]
+multicast-utility-selftest = "multicast_utility.selftest:main"
+
+[tool.setuptools.packages.find]
+include = ["multicast_utility*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "e2e: end-to-end tests that transmit and receive real multicast",
+]

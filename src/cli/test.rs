@@ -44,6 +44,22 @@ pub enum TestError {
     InvalidTimeout,
 }
 
+impl TestError {
+    /// Stable machine-readable code, so a consumer can branch on the *kind* of
+    /// failure rather than pattern-matching the message text.
+    pub fn code(&self) -> &'static str {
+        match self {
+            TestError::InvalidPattern(_) => "invalid_pattern",
+            TestError::Network(_) => "network",
+            TestError::Io(_) => "io",
+            TestError::Codec(_) => "codec",
+            TestError::Recorder(_) => "recorder",
+            TestError::NoEndpoints => "no_endpoints",
+            TestError::InvalidTimeout => "invalid_timeout",
+        }
+    }
+}
+
 /// Options for the test command
 pub struct TestOptions {
     pub pattern: String,
@@ -51,8 +67,109 @@ pub struct TestOptions {
     pub interface: Option<Ipv4Addr>,
     pub codec: Option<CodecType>,
     pub output_dir: PathBuf,
+    /// Overall run limit. `Duration::ZERO` means "run until stopped", matching
+    /// what `monitor` already accepts; the caller stops us with SIGINT/SIGTERM
+    /// and we still write a complete summary.
     pub timeout: Duration,
     pub metrics_interval: Duration,
+    /// Emit newline-delimited JSON events on stdout instead of prose.
+    pub json: bool,
+}
+
+/// Streaming events emitted by `test --json`.
+///
+/// The shapes intentionally mirror `monitor`'s `JsonEvent` where they overlap,
+/// so a consumer can share parsing between the two subcommands. Two additions
+/// matter for automation:
+///
+/// * [`TestEvent::Armed`] fires once every multicast group has been joined,
+///   which is the barrier a caller needs before triggering a page. Without it
+///   the only options were a blind sleep or scraping "Test mode started".
+/// * [`TestEvent::PageEnded`] carries `loss_percent` and `jitter_ms`, which
+///   `monitor`'s equivalent omits -- their absence there forces consumers to
+///   report zeros.
+#[derive(Debug, Serialize)]
+#[serde(tag = "event")]
+pub enum TestEvent {
+    #[serde(rename = "test_started")]
+    TestStarted {
+        timestamp: DateTime<Utc>,
+        pattern: String,
+        output_dir: String,
+        endpoint_count: usize,
+        /// `null` when running until stopped.
+        timeout_secs: Option<u64>,
+        metrics_interval_ms: u64,
+    },
+    /// Every group has been joined; it is safe to trigger a page.
+    ///
+    /// This proves the *local* IGMP join was issued. It does not prove an
+    /// upstream switch's snooping table has converged, so callers on real
+    /// switches should still allow a small settle delay -- but a named,
+    /// tunable one rather than a guess.
+    #[serde(rename = "armed")]
+    Armed {
+        timestamp: DateTime<Utc>,
+        interface: String,
+        endpoints: Vec<ArmedEndpoint>,
+    },
+    #[serde(rename = "page_started")]
+    PageStarted {
+        timestamp: DateTime<Utc>,
+        address: String,
+        port: u16,
+        page_number: u32,
+        codec: String,
+        ssrc: u32,
+    },
+    #[serde(rename = "page_ended")]
+    PageEnded {
+        timestamp: DateTime<Utc>,
+        address: String,
+        port: u16,
+        page_number: u32,
+        duration_secs: f64,
+        packets_received: u64,
+        bytes_received: u64,
+        packets_lost: u64,
+        loss_percent: f64,
+        jitter_ms: f64,
+        peak_rms_db: f64,
+        max_peak_db: f64,
+        dominant_freq_hz: f64,
+        total_glitches: u64,
+        total_clipped: u64,
+        recording_file: String,
+    },
+    #[serde(rename = "test_completed")]
+    TestCompleted {
+        timestamp: DateTime<Utc>,
+        duration_secs: f64,
+        pages_detected: usize,
+        error_count: usize,
+        stopped_by: &'static str,
+    },
+    #[serde(rename = "error")]
+    Error {
+        code: &'static str,
+        message: String,
+    },
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArmedEndpoint {
+    pub address: String,
+    pub port: u16,
+    pub joined: bool,
+}
+
+/// Write one JSONL event to stdout. Rust's stdout is line-buffered, so each
+/// event is flushed as it is written and a consumer can react immediately.
+pub fn emit_event(event: &TestEvent) {
+    match serde_json::to_string(event) {
+        Ok(line) => println!("{line}"),
+        Err(e) => eprintln!("Failed to serialize event: {e}"),
+    }
 }
 
 /// Network metrics for a snapshot
@@ -305,10 +422,10 @@ impl MetricsWriter {
 
 /// Run the test command
 pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
-    // Validate timeout
-    if options.timeout == Duration::ZERO {
-        return Err(TestError::InvalidTimeout);
-    }
+    // `timeout == 0` means "run until stopped", matching `monitor`. The caller
+    // sends SIGINT/SIGTERM and still gets a complete summary, so an automated
+    // run no longer has to guess an upper bound up front.
+    let run_forever = options.timeout == Duration::ZERO;
 
     // Create output directory
     fs::create_dir_all(&options.output_dir)?;
@@ -332,10 +449,38 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     // Each socket is bound to its specific multicast group address to ensure proper filtering
     // when multiple endpoints share the same port (e.g., 224.1.1.2:5000 and 224.1.1.3:5000)
     let interface = options.interface.unwrap_or(Ipv4Addr::UNSPECIFIED);
+
+    if options.json {
+        emit_event(&TestEvent::TestStarted {
+            timestamp: Utc::now(),
+            pattern: pattern.clone(),
+            output_dir: options.output_dir.display().to_string(),
+            endpoint_count,
+            timeout_secs: if run_forever { None } else { Some(options.timeout.as_secs()) },
+            metrics_interval_ms: options.metrics_interval.as_millis() as u64,
+        });
+    }
+
     let mut sockets: HashMap<(Ipv4Addr, u16), MulticastSocket> = HashMap::new();
+    let mut armed_endpoints: Vec<ArmedEndpoint> = Vec::with_capacity(endpoint_count);
     for ep in &endpoints {
         let socket = MulticastSocket::bound_to_group(ep.address, ep.port, interface).await?;
         sockets.insert((ep.address, ep.port), socket);
+        armed_endpoints.push(ArmedEndpoint {
+            address: ep.address.to_string(),
+            port: ep.port,
+            joined: true,
+        });
+    }
+
+    // Every group is joined: it is now safe for the caller to trigger a page.
+    // This is the barrier that replaces a blind sleep on the consumer side.
+    if options.json {
+        emit_event(&TestEvent::Armed {
+            timestamp: Utc::now(),
+            interface: interface.to_string(),
+            endpoints: armed_endpoints,
+        });
     }
 
     // Create endpoint states
@@ -350,13 +495,20 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     // Create metrics writer
     let mut metrics_writer = MetricsWriter::new(&options.output_dir)?;
 
-    // Print start message
-    println!("Test mode started");
-    println!("  Output directory: {}", options.output_dir.display());
-    println!("  Monitoring {} endpoint(s)", endpoint_count);
-    println!("  Timeout: {} seconds", options.timeout.as_secs());
-    println!("  Metrics interval: {}ms", options.metrics_interval.as_millis());
-    println!();
+    // Human-readable banner. Suppressed under --json so stdout carries only
+    // events and stays parseable.
+    if !options.json {
+        println!("Test mode started");
+        println!("  Output directory: {}", options.output_dir.display());
+        println!("  Monitoring {} endpoint(s)", endpoint_count);
+        if run_forever {
+            println!("  Timeout: none (run until stopped)");
+        } else {
+            println!("  Timeout: {} seconds", options.timeout.as_secs());
+        }
+        println!("  Metrics interval: {}ms", options.metrics_interval.as_millis());
+        println!();
+    }
 
     let test_start_time = Utc::now();
     let start_instant = Instant::now();
@@ -387,16 +539,24 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
         });
     }
 
+    let mut stopped_by = "timeout";
+
     loop {
         // Check for shutdown signal
         if shutdown.load(Ordering::SeqCst) {
-            println!("Received shutdown signal, finalizing...");
+            stopped_by = "signal";
+            if !options.json {
+                println!("Received shutdown signal, finalizing...");
+            }
             break;
         }
 
-        // Check for overall timeout
-        if start_instant.elapsed() >= options.timeout {
-            println!("Timeout reached.");
+        // Check for overall timeout (skipped entirely when running until stopped)
+        if !run_forever && start_instant.elapsed() >= options.timeout {
+            stopped_by = "timeout";
+            if !options.json {
+                println!("Timeout reached.");
+            }
             break;
         }
 
@@ -405,7 +565,7 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
             if state.page_active {
                 if let Some(last) = state.last_packet {
                     if last.elapsed() >= idle_timeout {
-                        if let Err(e) = handle_test_page_end(state, &options.output_dir) {
+                        if let Err(e) = handle_test_page_end(state, options.json) {
                             errors.push(format!("Error ending page on {}: {}", state.endpoint_string(), e));
                         }
                     }
@@ -459,7 +619,7 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     // Finalize any active recordings
     for state in endpoint_states.values_mut() {
         if state.page_active {
-            if let Err(e) = handle_test_page_end(state, &options.output_dir) {
+            if let Err(e) = handle_test_page_end(state, options.json) {
                 errors.push(format!("Error finalizing page on {}: {}", state.endpoint_string(), e));
             }
         }
@@ -479,18 +639,33 @@ pub async fn run_test(options: TestOptions) -> Result<(), TestError> {
     );
     write_summary(&options.output_dir, &summary)?;
 
-    // Print completion message
-    println!();
-    println!("Test completed");
-    println!("  Duration: {:.1}s", summary.test_metadata.duration_secs);
-    println!("  Pages detected: {}", summary.pages.len());
-    println!("  Errors: {}", summary.errors.len());
-    println!();
-    println!("Output files:");
-    println!("  {}/metrics.jsonl", options.output_dir.display());
-    println!("  {}/summary.json", options.output_dir.display());
-    for page in &summary.pages {
-        println!("  {}/{}", options.output_dir.display(), page.recording_file);
+    if options.json {
+        for message in &summary.errors {
+            emit_event(&TestEvent::Error {
+                code: "runtime",
+                message: message.clone(),
+            });
+        }
+        emit_event(&TestEvent::TestCompleted {
+            timestamp: test_end_time,
+            duration_secs: summary.test_metadata.duration_secs,
+            pages_detected: summary.pages.len(),
+            error_count: summary.errors.len(),
+            stopped_by,
+        });
+    } else {
+        println!();
+        println!("Test completed");
+        println!("  Duration: {:.1}s", summary.test_metadata.duration_secs);
+        println!("  Pages detected: {}", summary.pages.len());
+        println!("  Errors: {}", summary.errors.len());
+        println!();
+        println!("Output files:");
+        println!("  {}/metrics.jsonl", options.output_dir.display());
+        println!("  {}/summary.json", options.output_dir.display());
+        for page in &summary.pages {
+            println!("  {}/{}", options.output_dir.display(), page.recording_file);
+        }
     }
 
     Ok(())
@@ -538,7 +713,7 @@ fn handle_test_packet(
     if state.ssrc.is_none() || state.ssrc != Some(packet.header.ssrc) {
         // If there was a previous page active, finalize it first
         if state.page_active {
-            handle_test_page_end(state, &options.output_dir)?;
+            handle_test_page_end(state, options.json)?;
         }
 
         state.page_count += 1;
@@ -548,20 +723,51 @@ fn handle_test_packet(
         state.page_active = true;
         state.stats = PageStats::default();
 
-        // Codec type for potential future use (logging, metadata)
-        let _codec_type = options.codec.unwrap_or_else(|| {
-            CodecType::from_payload_type(packet.header.payload_type)
-                .unwrap_or(CodecType::G711Ulaw)
-        });
+        // Decoding is always driven by the wire payload type, which is the
+        // correct behavior: the sender decides the codec, and guessing wrong
+        // produces garbage audio rather than an error.
+        //
+        // `--codec` is therefore advisory. It used to be silently discarded,
+        // which meant a caller could pass the wrong codec and never learn that
+        // the stream disagreed. It is now checked, and a mismatch is reported.
+        let detected = CodecType::from_payload_type(packet.header.payload_type);
+        if let (Some(expected), Some(actual)) = (options.codec, detected) {
+            if expected != actual {
+                let message = format!(
+                    "{}: stream uses {:?} (payload type {}) but --codec requested {:?}; \
+                     decoding follows the stream",
+                    state.endpoint_string(),
+                    actual,
+                    packet.header.payload_type,
+                    expected,
+                );
+                if options.json {
+                    emit_event(&TestEvent::Error { code: "codec_mismatch", message });
+                } else {
+                    eprintln!("Warning: {message}");
+                }
+            }
+        }
 
         let payload_type = PayloadType::from_pt(packet.header.payload_type);
 
-        println!(
-            "[{}] Page {} started (codec: {})",
-            state.endpoint_string(),
-            state.page_count,
-            payload_type.name()
-        );
+        if options.json {
+            emit_event(&TestEvent::PageStarted {
+                timestamp: state.page_start_utc.unwrap_or_else(Utc::now),
+                address: state.address.to_string(),
+                port: state.port,
+                page_number: state.page_count,
+                codec: payload_type.name().to_string(),
+                ssrc: packet.header.ssrc,
+            });
+        } else {
+            println!(
+                "[{}] Page {} started (codec: {})",
+                state.endpoint_string(),
+                state.page_count,
+                payload_type.name()
+            );
+        }
 
         // Create decoder
         state.decoder = Some(create_decoder_for_payload_type(packet.header.payload_type)?);
@@ -607,7 +813,7 @@ fn handle_test_packet(
 
 fn handle_test_page_end(
     state: &mut TestEndpointState,
-    _output_dir: &Path,
+    json: bool,
 ) -> Result<(), TestError> {
     let duration = match (state.page_start, state.last_packet) {
         (Some(start), Some(last)) => last.duration_since(start).as_secs_f64(),
@@ -625,13 +831,36 @@ fn handle_test_page_end(
         state.port
     );
 
-    println!(
-        "[{}] Page {} ended (duration: {:.1}s, glitches: {})",
-        state.endpoint_string(),
-        state.page_count,
-        duration,
-        state.audio_stats.total_glitches
-    );
+    if json {
+        emit_event(&TestEvent::PageEnded {
+            timestamp: end_time,
+            address: state.address.to_string(),
+            port: state.port,
+            page_number: state.page_count,
+            duration_secs: duration,
+            packets_received: state.stats.packets_received,
+            bytes_received: state.stats.bytes_received,
+            packets_lost: state.stats.packets_lost,
+            // These two are the fields `monitor`'s PageEnded omits, which is why
+            // consumers of that event can only ever report zero loss and jitter.
+            loss_percent: state.stats.loss_percent(),
+            jitter_ms: state.stats.jitter_ms,
+            peak_rms_db: state.audio_stats.peak_rms_db,
+            max_peak_db: state.audio_stats.max_peak_db,
+            dominant_freq_hz: state.audio_stats.dominant_freq_hz,
+            total_glitches: state.audio_stats.total_glitches,
+            total_clipped: state.audio_stats.total_clipped,
+            recording_file: filename.clone(),
+        });
+    } else {
+        println!(
+            "[{}] Page {} ended (duration: {:.1}s, glitches: {})",
+            state.endpoint_string(),
+            state.page_count,
+            duration,
+            state.audio_stats.total_glitches
+        );
+    }
 
     // Finalize recording
     if let Some(rec) = state.recorder.take() {

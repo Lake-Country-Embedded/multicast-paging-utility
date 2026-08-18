@@ -55,3 +55,9 @@ tarpaulin-report.html
 # Core dumps
 core
 core.*
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/

@@ -1,5 +1,0 @@
-[console_scripts]
-multicast-utility-selftest = multicast_utility.selftest:main
-
-[pytest11]
-multicast_utility = multicast_utility.pytest_plugin

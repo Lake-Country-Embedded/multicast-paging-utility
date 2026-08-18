@@ -43,31 +43,50 @@ class NetworkSummary:
         )
 
 
+def _opt_float(raw: Mapping[str, Any], key: str) -> Optional[float]:
+    """Read a float that the analyzer may report as JSON null.
+
+    A page carrying only digital silence has no measurable RMS, and the Rust
+    analyzer emits ``"peak_rms_db": null`` rather than omitting the key. A plain
+    ``raw.get(key, default)`` returns ``None`` in that case -- the default only
+    applies to a *missing* key -- so ``float()`` then raises and the whole
+    summary fails to parse. That turns "the stream was silent", which is a
+    legitimate and interesting result, into an unparseable run.
+    """
+    value = raw.get(key)
+    return None if value is None else float(value)
+
+
 @dataclass(frozen=True)
 class AudioSummary:
-    peak_rms_db: float = -96.0
-    # None when no valid samples were seen. The Rust side omits the field
-    # entirely in that case, so None is meaningfully different from a number --
-    # do not default it to -96 or "no audio at all" reads as "very quiet".
+    # None when no valid samples were seen -- a page of pure silence, or one too
+    # short to analyze. Meaningfully different from a number: do not collapse it
+    # to -96, or "no audio at all" reads as "very quiet".
+    peak_rms_db: Optional[float] = None
     avg_rms_db: Optional[float] = None
-    max_peak_db: float = -96.0
+    max_peak_db: Optional[float] = None
     dominant_freq_hz: float = 0.0
     total_glitches: int = 0
     total_clipped: int = 0
     clipping_percent: float = 0.0
     avg_zero_crossing_rate: float = 0.0
 
+    @property
+    def silent(self) -> bool:
+        """No measurable audio content, however many packets arrived."""
+        return self.peak_rms_db is None
+
     @classmethod
     def from_json(cls, raw: Mapping[str, Any]) -> "AudioSummary":
         return cls(
-            peak_rms_db=float(raw.get("peak_rms_db", -96.0)),
-            avg_rms_db=float(raw["avg_rms_db"]) if "avg_rms_db" in raw else None,
-            max_peak_db=float(raw.get("max_peak_db", -96.0)),
-            dominant_freq_hz=float(raw.get("dominant_freq_hz", 0.0)),
-            total_glitches=int(raw.get("total_glitches", 0)),
-            total_clipped=int(raw.get("total_clipped", 0)),
-            clipping_percent=float(raw.get("clipping_percent", 0.0)),
-            avg_zero_crossing_rate=float(raw.get("avg_zero_crossing_rate", 0.0)),
+            peak_rms_db=_opt_float(raw, "peak_rms_db"),
+            avg_rms_db=_opt_float(raw, "avg_rms_db"),
+            max_peak_db=_opt_float(raw, "max_peak_db"),
+            dominant_freq_hz=float(raw.get("dominant_freq_hz") or 0.0),
+            total_glitches=int(raw.get("total_glitches") or 0),
+            total_clipped=int(raw.get("total_clipped") or 0),
+            clipping_percent=float(raw.get("clipping_percent") or 0.0),
+            avg_zero_crossing_rate=float(raw.get("avg_zero_crossing_rate") or 0.0),
         )
 
 
@@ -141,11 +160,19 @@ class MetricSnapshot:
     bytes: int
     loss_percent: float
     jitter_ms: float
-    rms_db: float
-    peak_db: float
+    # None when the snapshot carried no measurable audio -- a window of pure
+    # silence still produces packets, so "quiet" and "no traffic" are different
+    # states and must stay distinguishable.
+    rms_db: Optional[float]
+    peak_db: Optional[float]
     dominant_freq_hz: float
     glitches: int
     clipped: int
+
+    @property
+    def silent(self) -> bool:
+        """Packets arrived (or not) but carried no measurable audio."""
+        return self.rms_db is None
 
     @classmethod
     def from_json(cls, raw: Mapping[str, Any]) -> "MetricSnapshot":
@@ -161,11 +188,11 @@ class MetricSnapshot:
             bytes=int(network.get("bytes", 0)),
             loss_percent=float(network.get("loss_percent", 0.0)),
             jitter_ms=float(network.get("jitter_ms", 0.0)),
-            rms_db=float(audio.get("rms_db", -96.0)),
-            peak_db=float(audio.get("peak_db", -96.0)),
-            dominant_freq_hz=float(audio.get("dominant_freq_hz", 0.0)),
-            glitches=int(audio.get("glitches", 0)),
-            clipped=int(audio.get("clipped", 0)),
+            rms_db=_opt_float(audio, "rms_db"),
+            peak_db=_opt_float(audio, "peak_db"),
+            dominant_freq_hz=float(audio.get("dominant_freq_hz") or 0.0),
+            glitches=int(audio.get("glitches") or 0),
+            clipped=int(audio.get("clipped") or 0),
         )
 
 
@@ -280,7 +307,7 @@ class TestSummary:
         wanted = _coerce(endpoint).endpoint if not isinstance(endpoint, str) else endpoint
         levels = [
             m.rms_db for m in self.metrics()
-            if m.page_active and m.endpoint == wanted
+            if m.page_active and m.endpoint == wanted and m.rms_db is not None
         ]
         return max(levels) if levels else -96.0
 
